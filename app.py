@@ -208,7 +208,7 @@ def extract_preview():
 
 
             for i_r, img in enumerate(images):
-                response.setdefault(img["position"], []).append({ 'diameter': data[i_r]['diameter'], 'lg': data[i_r]["lg"], 'n': data[i_r]['n'], 'lgn': data[i_r]['lgn'], 'oblikIMere': f"{BASE_URL}{img["img_path"]}" })
+                response.setdefault(img["position"], []).append({ 'diameter': data[i_r]['diameter'], 'lg': data[i_r]["lg"], 'n': data[i_r]['n'], 'lgn': data[i_r]['lgn'], 'oblikIMere': f"{BASE_URL}{img['img_path']}" })
             # Draw lines - PINK
             # for line in first_page.lines:
             #     if line['x0'] >= x_min and line['x1'] <= x_max:
