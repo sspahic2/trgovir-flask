@@ -8,3 +8,6 @@ dist/
 htmlcov/
 .tox/
 docs/_build/
+uploads/
+extracted_shapes/
+fullcode.txt

@@ -1,16 +1,17 @@
 import json
 import pdfplumber
-import pandas as pd
+import os
 import re
 from typing import List, Optional, Dict
 
 class PDFSelectiveNumericTableExtractor:
-    def __init__(self, pdf_path: str, columns_to_extract: List[int], indicator_texts: List[str], field_mapping: Dict[str, int]):
+    def __init__(self, pdf_path: str, columns_to_extract: List[int], indicator_texts: List[str], field_mapping: Dict[str, int], pdf = None):
         self.pdf_path = pdf_path
-        self.columns_to_extract = columns_to_extract  # 0-based indexes of the columns you want
-        self.indicator_texts = indicator_texts  # list of strings that must appear on the page
-        self.field_mapping = field_mapping  # {"field_name": column_index}
+        self.columns_to_extract = columns_to_extract
+        self.indicator_texts = indicator_texts
+        self.field_mapping = field_mapping
         self.rows = []
+        self.pdf = pdf
 
     def clean_number(self, value: str) -> Optional[float | int]:
         if not value:
@@ -35,37 +36,53 @@ class PDFSelectiveNumericTableExtractor:
         return False
 
     def extract(self):
-        with pdfplumber.open(self.pdf_path) as pdf:
-            for page in pdf.pages:
-                if self.page_contains_indicator(page):
-                    tables = page.extract_tables()
-                    if not tables:
-                        continue
-                    for table in tables:
-                        for row in table:
-                            mapped_row = {}
-                            for field_name, idx in self.field_mapping.items():
-                                if idx < len(row):
-                                    value = self.clean_number(row[idx])
-                                    mapped_row[field_name] = value
+        if self.pdf != None:
+            pdf = self.pdf
+        else:
+            pdf = pdfplumber.open(self.pdf_path)
+        
+        for page_num, page in enumerate(pdf.pages):
+            if self.page_contains_indicator(page):
+                table_settings = {
+                    "vertical_strategy": "lines",
+                    "horizontal_strategy": "lines",
+                }
+                tables = page.find_tables(table_settings=table_settings)
+                if not tables:
+                    continue
+                for table_idx, table in enumerate(tables):
+                    for row_idx, row in enumerate(table.rows):
+                        # if row_idx >= 4:
+                        #     break
+
+                        mapped_row = {}
+                        for field_name, idx in self.field_mapping.items():
+                            if idx < len(row.cells):
+                                bbox = row.cells[idx]
+                                if bbox:
+                                    value = page.crop(bbox).extract_text()
+                                    value = self.clean_number(f"{value}")
                                 else:
-                                    mapped_row[field_name] = None
-                            if any(mapped_row.values()):  # At least one number present
-                                self.rows.append(mapped_row)
+                                    value = None
+                                mapped_row[field_name] = value
+                            else:
+                                mapped_row[field_name] = None
+
+                        if any(mapped_row.values()):
+                            self.rows.append(mapped_row)
 
     def to_json(self):
-        return self.rows  # It’s already a list of dictionaries
+        return self.rows
 
     def run(self):
         self.extract()
         return self.to_json()
 
 # Example usage
-
 if __name__ == "__main__":
     extractor = PDFSelectiveNumericTableExtractor(
         pdf_path="SPECIFIKACIJA ARMATURE ZIDOVA 2.SPRATA ISPRAVLJENO.pdf",
-        columns_to_extract=[2, 3, 4, 5],  # optional now because mapping is enough
+        columns_to_extract=[2, 3, 4, 5],
         indicator_texts=[
             "Šiple - specifikacija", "Šipke-specifikacija",
             "šipke-Specifikacija", "šipke - Specifikacija",
@@ -80,4 +97,4 @@ if __name__ == "__main__":
     )
 
     data = extractor.run()
-    print(json.dumps(data))
+    print(json.dumps(data, indent=2))
