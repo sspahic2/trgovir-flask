@@ -16,10 +16,10 @@ ALLOWED_EXTENSIONS = {'pdf'}
 EXTRACTED_SHAPES_FOLDER = 'extracted_shapes'
 MAGIC_NUMBER = 3
 os.makedirs(EXTRACTED_SHAPES_FOLDER, exist_ok=True)
-BASE_URL = "https://trgovir-flask.onrender.com/"
+BASE_URL = "http://127.0.0.1:5000/"
 
 app = Flask(__name__)
-CORS(app)
+CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
 if not os.path.exists(UPLOAD_FOLDER):
@@ -41,6 +41,17 @@ def serve_extracted_shape(timestamp, filename):
     if not filename.endswith((".png", ".jpg", ".jpeg")):
         abort(403)
     return send_from_directory('extracted_shapes', f"{timestamp}/{filename}")
+
+@app.after_request
+def add_cors_headers(response):
+    response.headers['Access-Control-Allow-Origin'] = '*'
+    response.headers['Access-Control-Allow-Headers'] = 'Content-Type,Authorization'
+    response.headers['Access-Control-Allow-Methods'] = 'GET,POST,OPTIONS'
+    return response
+
+@app.route('/extract-preview', methods=['OPTIONS'])
+def extract_preview_options():
+    return '', 200
 
 @app.route('/extract', methods=['POST'])
 def extract_pdf():
@@ -208,7 +219,7 @@ def extract_preview():
 
 
             for i_r, img in enumerate(images):
-                response.setdefault(img["position"], []).append({ 'diameter': data[i_r]['diameter'], 'lg': data[i_r]["lg"], 'n': data[i_r]['n'], 'lgn': data[i_r]['lgn'], 'oblikIMere': f"{BASE_URL}{img['img_path']}" })
+                response.setdefault(img["position"], []).append({ 'diameter': data[i_r]['diameter'], 'lg': data[i_r]["lg"], 'n': data[i_r]['n'], 'lgn': data[i_r]['lgn'], 'oblikIMere': f"{img['img_path']}" })
             # Draw lines - PINK
             # for line in first_page.lines:
             #     if line['x0'] >= x_min and line['x1'] <= x_max:
