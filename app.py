@@ -19,7 +19,10 @@ os.makedirs(EXTRACTED_SHAPES_FOLDER, exist_ok=True)
 BASE_URL = "http://127.0.0.1:5000/"
 
 app = Flask(__name__)
-CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True)
+CORS(app, origins=[
+    "https://trgovir.vercel.app",
+    "http://localhost:3000"
+], supports_credentials=True)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
 if not os.path.exists(UPLOAD_FOLDER):
@@ -44,7 +47,11 @@ def serve_extracted_shape(timestamp, filename):
 
 @app.after_request
 def add_cors_headers(response):
-    response.headers['Access-Control-Allow-Origin'] = '*'
+    origin = request.headers.get('Origin')
+    allowed_origins = {"https://trgovir.vercel.app", "http://localhost:3000"}
+    if origin in allowed_origins:
+        response.headers['Access-Control-Allow-Origin'] = origin
+        response.headers['Access-Control-Allow-Credentials'] = 'true'
     response.headers['Access-Control-Allow-Headers'] = 'Content-Type,Authorization'
     response.headers['Access-Control-Allow-Methods'] = 'GET,POST,OPTIONS'
     return response
