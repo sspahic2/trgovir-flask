@@ -69,6 +69,7 @@ class PDFSelectiveNumericTableExtractor:
                                 mapped_row[field_name] = None
 
                         if any(mapped_row.values()):
+                            print(mapped_row)
                             self.rows.append(mapped_row)
 
     def to_json(self):
