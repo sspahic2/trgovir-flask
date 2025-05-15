@@ -177,7 +177,7 @@ def extract_preview():
     timestamp = int(time.time())
     global_data_index = 0
     response_payload = {}
-    current_page_position_text = "" 
+    current_page_position_text = "Pozicija_1" 
 
     for page_num, page_obj in enumerate(pdf_plumber_instance.pages):
         page_text = page_obj.extract_text() or ""
@@ -293,10 +293,6 @@ def extract_preview():
                             if obj["x0"] >= scaled_x0 and obj["x1"] <= scaled_x1
                             and obj["y0"] >= scaled_y0 and obj["y1"] <= scaled_y1
                         ]
-
-                        print("-------------------------------------------------CELL------------------------------------------------------")
-                        print(content_objects)
-                        print("-------------------------------------------------ENDCELL----------------------------------------------")
 
                         if content_objects:
                             obj_x0 = min(obj["x0"] for obj in content_objects)

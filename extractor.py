@@ -36,41 +36,64 @@ class PDFSelectiveNumericTableExtractor:
         return False
 
     def extract(self):
-        if self.pdf != None:
+        if self.pdf is not None:
             pdf = self.pdf
         else:
             pdf = pdfplumber.open(self.pdf_path)
-        
+
         for page_num, page in enumerate(pdf.pages):
-            if self.page_contains_indicator(page):
-                table_settings = {
-                    "vertical_strategy": "lines",
-                    "horizontal_strategy": "lines",
-                }
-                tables = page.find_tables(table_settings=table_settings)
-                if not tables:
-                    continue
-                for table_idx, table in enumerate(tables):
-                    for row_idx, row in enumerate(table.rows):
-                        # if row_idx >= 4:
-                        #     break
+            if not self.page_contains_indicator(page):
+                continue
 
-                        mapped_row = {}
-                        for field_name, idx in self.field_mapping.items():
-                            if idx < len(row.cells):
-                                bbox = row.cells[idx]
-                                if bbox:
-                                    value = page.crop(bbox).extract_text()
-                                    value = self.clean_number(f"{value}")
-                                else:
-                                    value = None
-                                mapped_row[field_name] = value
+            table_settings = {
+                "vertical_strategy": "lines",
+                "horizontal_strategy": "lines",
+            }
+            tables = page.find_tables(table_settings=table_settings)
+            if not tables:
+                continue
+
+            for table_idx, table in enumerate(tables):
+                for row_idx, row in enumerate(table.rows):
+                    # 🛑 STOP parsing more rows if this row contains the stop keyword
+                    row_text = " ".join(
+                        filter(None, [
+                            page.crop(cell).extract_text() if cell else ""
+                            for cell in row.cells
+                        ])
+                    ).lower()
+
+                    if "mreže - specifikacija" in row_text:
+                        break  # stop parsing rows for this page
+
+                    # 👇 Use backup_field_mappings for 12-cell rows
+                    if len(row.cells) == 12:
+                        used_mapping = {
+                            "diameter": 6,
+                            "lg": 8,
+                            "n": 10,
+                            "lgn": 11
+                        }
+                    else:
+                        used_mapping = self.field_mapping
+
+                    mapped_row = {}
+                    for field_name, idx in used_mapping.items():
+                        if idx < len(row.cells):
+                            bbox = row.cells[idx]
+                            if bbox:
+                                value = page.crop(bbox).extract_text()
+                                value = self.clean_number(f"{value}")
                             else:
-                                mapped_row[field_name] = None
+                                value = None
+                        else:
+                            value = None
+                        mapped_row[field_name] = value
 
-                        if any(mapped_row.values()):
-                            print(mapped_row)
-                            self.rows.append(mapped_row)
+                    if any(mapped_row.values()):
+                        self.rows.append(mapped_row)
+
+
 
     def to_json(self):
         return self.rows
@@ -85,7 +108,7 @@ if __name__ == "__main__":
         pdf_path="SPECIFIKACIJA ARMATURE ZIDOVA 2.SPRATA ISPRAVLJENO.pdf",
         columns_to_extract=[2, 3, 4, 5],
         indicator_texts=[
-            "Šiple - specifikacija", "Šipke-specifikacija",
+            "Šipke - specifikacija", "Šipke-specifikacija",
             "šipke-Specifikacija", "šipke - Specifikacija",
             "Šipke-Specifikacija", "Šipke - Specifikacija"
         ],
