@@ -207,6 +207,29 @@ def extract_preview():
             img_width_pixels, img_height_pixels = pil_image_obj.size
             image_draw_context = ImageDraw.Draw(pil_image_obj)
 
+            # # DEBUG: Draw red boxes around all detected words
+            # for word in page_obj.extract_words():
+            #     x0 = (word["x0"] / page_width_pdf) * img_width_pixels
+            #     y0 = (word["top"] / page_height_pdf) * img_height_pixels
+            #     x1 = (word["x1"] / page_width_pdf) * img_width_pixels
+            #     y1 = (word["bottom"] / page_height_pdf) * img_height_pixels
+            #     image_draw_context.rectangle([x0, y0, x1, y1], outline="red", width=1)
+
+            x_scale = img_width_pixels / page_width_pdf
+            y_scale = img_height_pixels / page_height_pdf
+
+            # for obj_type in ["line", "rect", "curve"]:
+            #     for obj in page_obj.objects.get(obj_type, []):
+            #         try:
+            #             x0 = obj["x0"] * x_scale
+            #             x1 = obj["x1"] * x_scale
+            #             y0 = img_height_pixels - (obj["y1"] * y_scale)
+            #             y1 = img_height_pixels - (obj["y0"] * y_scale)
+            #             image_draw_context.rectangle([x0, y0, x1, y1], outline="red", width=1)
+            #         except Exception as e:
+            #             app.logger.warning(f"Failed to draw object: {e}")
+
+
             page_specific_image_folder = os.path.join(EXTRACTED_SHAPES_FOLDER, str(timestamp))
             os.makedirs(page_specific_image_folder, exist_ok=True)
             
@@ -218,11 +241,13 @@ def extract_preview():
                         continue
 
                     x0_pdf, y0_pdf, x1_pdf, y1_pdf = cell_coords_pdf
-                    
-                    scaled_x0 = (x0_pdf / page_width_pdf) * img_width_pixels
-                    scaled_y0 = (y0_pdf / page_height_pdf) * img_height_pixels
-                    scaled_x1 = (x1_pdf / page_width_pdf) * img_width_pixels
-                    scaled_y1 = (y1_pdf / page_height_pdf) * img_height_pixels
+                    inset = 3  # or 5 pixels if needed
+
+                    scaled_x0 = ((x0_pdf / page_width_pdf) * img_width_pixels) + inset
+                    scaled_y0 = ((y0_pdf / page_height_pdf) * img_height_pixels) + inset
+                    scaled_x1 = ((x1_pdf / page_width_pdf) * img_width_pixels) - inset
+                    scaled_y1 = ((y1_pdf / page_height_pdf) * img_height_pixels) - inset
+
                     
                     cell_width_pdf = x1_pdf - x0_pdf
                     is_wide_cell = abs(cell_width_pdf - (table_x_max_pdf - table_x_min_pdf)) < 2
@@ -234,17 +259,72 @@ def extract_preview():
                         image_draw_context.rectangle([scaled_x0, scaled_y0, scaled_x1, scaled_y1], outline="green", width=2)
 
                     if cell_index == 1 and row_index != 1:
-                        cropped_shape_image = pil_image_obj.crop((scaled_x0, scaled_y0, scaled_x1, scaled_y1))
-                        
+                        visual_objects = []
+
+                        for obj_type in ["line", "rect", "curve"]:
+                            for obj in page_obj.objects.get(obj_type, []):
+                                x0 = obj["x0"] * x_scale
+                                x1 = obj["x1"] * x_scale
+                                y0 = img_height_pixels - (obj["y1"] * y_scale)
+                                y1 = img_height_pixels - (obj["y0"] * y_scale)
+                                visual_objects.append({
+                                    "x0": min(x0, x1),
+                                    "x1": max(x0, x1),
+                                    "y0": min(y0, y1),
+                                    "y1": max(y0, y1)
+                                })
+
+                        # Normalize keys for words
+                        word_objects = []
+                        for word in page_obj.extract_words():
+                            x0 = (word["x0"] / page_width_pdf) * img_width_pixels
+                            y0 = (word["top"] / page_height_pdf) * img_height_pixels
+                            x1 = (word["x1"] / page_width_pdf) * img_width_pixels
+                            y1 = (word["bottom"] / page_height_pdf) * img_height_pixels
+                            word_objects.append({
+                                "x0": x0,
+                                "x1": x1,
+                                "y0": y0,
+                                "y1": y1
+                            })
+
+                        content_objects = [
+                            obj for obj in (word_objects + visual_objects)
+                            if obj["x0"] >= scaled_x0 and obj["x1"] <= scaled_x1
+                            and obj["y0"] >= scaled_y0 and obj["y1"] <= scaled_y1
+                        ]
+
+                        print("-------------------------------------------------CELL------------------------------------------------------")
+                        print(content_objects)
+                        print("-------------------------------------------------ENDCELL----------------------------------------------")
+
+                        if content_objects:
+                            obj_x0 = min(obj["x0"] for obj in content_objects)
+                            obj_y0 = min(obj["y0"] for obj in content_objects)
+                            obj_x1 = max(obj["x1"] for obj in content_objects)
+                            obj_y1 = max(obj["y1"] for obj in content_objects)
+
+                            pad = 10
+                            scaled_cx0 = max(0, obj_x0 - pad)
+                            scaled_cy0 = max(0, obj_y0 - pad)
+                            scaled_cx1 = min(img_width_pixels, obj_x1 + pad)
+                            scaled_cy1 = min(img_height_pixels, obj_y1 + pad)
+
+                            cropped_shape_image = pil_image_obj.crop((scaled_cx0, scaled_cy0, scaled_cx1, scaled_cy1))
+                        else:
+                            # fallback to full cell bounding box
+                            cropped_shape_image = pil_image_obj.crop((scaled_x0, scaled_y0, scaled_x1, scaled_y1))
+
                         img_filename = f"page_{page_num}_row_{row_index}_cell_1.png"
                         img_full_save_path = os.path.join(page_specific_image_folder, img_filename)
                         cropped_shape_image.save(img_full_save_path)
-                        
+
                         img_path_segment_for_url = os.path.join(str(timestamp), img_filename).replace("\\", "/")
                         images_collected_for_page.append({
                             'position': current_page_position_text,
                             'img_path_segment': img_path_segment_for_url
                         })
+
                         image_draw_context.rectangle([scaled_x0, scaled_y0, scaled_x1, scaled_y1], outline="red", width=1)
             
             for img_details in images_collected_for_page:
