@@ -241,7 +241,7 @@ def extract_preview():
                         continue
 
                     x0_pdf, y0_pdf, x1_pdf, y1_pdf = cell_coords_pdf
-                    inset = 3  # or 5 pixels if needed
+                    inset = 5  # or 5 pixels if needed
 
                     scaled_x0 = ((x0_pdf / page_width_pdf) * img_width_pixels) + inset
                     scaled_y0 = ((y0_pdf / page_height_pdf) * img_height_pixels) + inset
