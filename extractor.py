@@ -85,7 +85,6 @@ class PDFSelectiveNumericTableExtractor:
                             if bbox:
                                 value = page.crop(bbox).extract_text()
                                 value = self.clean_number(f"{value}")
-                                print("CELL", bbox, value)
                             else:
                                 value = None
                         else:
