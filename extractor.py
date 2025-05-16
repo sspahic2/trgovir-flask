@@ -69,6 +69,7 @@ class PDFSelectiveNumericTableExtractor:
                     # 👇 Use backup_field_mappings for 12-cell rows
                     if len(row.cells) == 12:
                         used_mapping = {
+                            "ozn": 0,
                             "diameter": 6,
                             "lg": 8,
                             "n": 10,
@@ -84,13 +85,15 @@ class PDFSelectiveNumericTableExtractor:
                             if bbox:
                                 value = page.crop(bbox).extract_text()
                                 value = self.clean_number(f"{value}")
+                                print("CELL", bbox, value)
                             else:
                                 value = None
                         else:
                             value = None
                         mapped_row[field_name] = value
 
-                    if any(mapped_row.values()):
+                    none_count = sum(1 for v in mapped_row.values() if v is None)
+                    if none_count < 2:
                         self.rows.append(mapped_row)
 
 
@@ -113,6 +116,7 @@ if __name__ == "__main__":
             "Šipke-Specifikacija", "Šipke - Specifikacija"
         ],
         field_mapping={
+            "ozn": 0,
             "diameter": 2,
             "lg": 3,
             "n": 4,

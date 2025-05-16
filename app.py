@@ -91,7 +91,7 @@ def extract_pdf():
 
         extractor = PDFSelectiveNumericTableExtractor(
             pdf_path=file_path,
-            columns_to_extract=[2, 3, 4, 5],
+            columns_to_extract=[0, 2, 3, 4, 5],
             indicator_texts=[
                 "Šiple - specifikacija", "Šipke-specifikacija",
                 "šipke-Specifikacija", "šipke - Specifikacija",
@@ -99,6 +99,7 @@ def extract_pdf():
                 "SPECIFIKACIJA - Armaturne šipke"
             ],
             field_mapping={
+                "ozn": 0,
                 "diameter": 2,
                 "lg": 3,
                 "n": 4,
@@ -123,8 +124,8 @@ def extract_preview():
         "Šipke-Specifikacija", "Šipke - Specifikacija",
         "SPECIFIKACIJA - Armaturne šipke"
     ]
-    field_mapping = { "diameter": 2, "lg": 3, "n": 4, "lgn": 5 }
-    columns_to_extract = [2, 3, 4, 5]
+    field_mapping = { "ozn": 0, "diameter": 2, "lg": 3, "n": 4, "lgn": 5 }
+    columns_to_extract = [0, 2, 3, 4, 5]
 
     pdf_plumber_instance = None
     file_path_for_cleanup = None
@@ -329,6 +330,7 @@ def extract_preview():
                     image_url = f"extracted_shapes/{img_details['img_path_segment']}"
                     
                     response_payload.setdefault(img_details["position"], []).append({
+                        "ozn": current_data_item.get('ozn'),
                         "diameter": current_data_item.get('diameter'),
                         "lg": current_data_item.get('lg'),
                         "n": current_data_item.get('n'),
