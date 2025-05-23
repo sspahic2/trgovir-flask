@@ -1,4 +1,5 @@
 import json
+from collections import OrderedDict
 from flask import Flask, abort, request, jsonify, send_from_directory
 import os
 from flask_cors import CORS
@@ -177,8 +178,11 @@ def extract_preview():
     
     timestamp = int(time.time())
     global_data_index = 0
-    response_payload = {}
+    response_payload = OrderedDict()
     current_page_position_text = "Pozicija_1" 
+    current_page_position_order = -1
+    final_payload = []
+    position_group_map = {}
 
     for page_num, page_obj in enumerate(pdf_plumber_instance.pages):
         page_text = page_obj.extract_text() or ""
@@ -219,7 +223,7 @@ def extract_preview():
             x_scale = img_width_pixels / page_width_pdf
             y_scale = img_height_pixels / page_height_pdf
 
-            # for obj_type in ["line", "rect", "curve"]:
+            # for obj_type in ["line"]: #["line", "rect", "curve"]:
             #     for obj in page_obj.objects.get(obj_type, []):
             #         try:
             #             x0 = obj["x0"] * x_scale
@@ -257,6 +261,7 @@ def extract_preview():
                         extracted_text_from_cell = page_obj.crop(cell_coords_pdf).extract_text()
                         if extracted_text_from_cell:
                             current_page_position_text = extracted_text_from_cell.strip()
+                            current_page_position_order = current_page_position_order + 1
                         image_draw_context.rectangle([scaled_x0, scaled_y0, scaled_x1, scaled_y1], outline="green", width=2)
 
                     if cell_index == 1 and row_index != 1:
@@ -319,29 +324,45 @@ def extract_preview():
                         img_path_segment_for_url = os.path.join(str(timestamp), img_filename).replace("\\", "/")
                         images_collected_for_page.append({
                             'position': current_page_position_text,
-                            'img_path_segment': img_path_segment_for_url
+                            'img_path_segment': img_path_segment_for_url,
+                            'order': max(current_page_position_order, 0)
                         })
 
                         image_draw_context.rectangle([scaled_x0, scaled_y0, scaled_x1, scaled_y1], outline="red", width=1)
-            
+
             for img_details in images_collected_for_page:
-                if global_data_index < len(extracted_data):
-                    current_data_item = extracted_data[global_data_index]
-                    image_url = f"extracted_shapes/{img_details['img_path_segment']}"
-                    
-                    response_payload.setdefault(img_details["position"], []).append({
-                        "ozn": current_data_item.get('ozn'),
-                        "diameter": current_data_item.get('diameter'),
-                        "lg": current_data_item.get('lg'),
-                        "n": current_data_item.get('n'),
-                        "lgn": current_data_item.get('lgn'),
-                        "oblikIMere": image_url
-                    })
-                    global_data_index += 1
-                else:
+                if global_data_index >= len(extracted_data):
                     app.logger.warning(f"Data list exhausted. global_data_index: {global_data_index}, len(data): {len(extracted_data)}")
                     break
-            
+
+                current_data_item = extracted_data[global_data_index]
+                global_data_index += 1
+
+                position = img_details["position"]
+                order = img_details["order"]
+                image_url = f"extracted_shapes/{img_details['img_path_segment']}"
+
+                row = {
+                    "ozn": current_data_item.get('ozn'),
+                    "diameter": current_data_item.get('diameter'),
+                    "lg": current_data_item.get('lg'),
+                    "n": current_data_item.get('n'),
+                    "lgn": current_data_item.get('lgn'),
+                    "oblikIMere": image_url
+                }
+
+                if position in position_group_map:
+                    position_group_map[position]["rows"].append(row)
+                else:
+                    group = {
+                        "position": position,
+                        "order": order,
+                        "rows": [row]
+                    }
+                    final_payload.append(group)
+                    position_group_map[position] = group
+
+                        
             output_preview_path = os.path.join(page_specific_image_folder, f"preview_{page_num}.png")
             pil_image_obj.save(output_preview_path)
 
@@ -354,7 +375,7 @@ def extract_preview():
          except OSError as e:
              app.logger.error(f"Error removing uploaded file {file_path_for_cleanup}: {e}")
              
-    return jsonify(response_payload)
+    return jsonify(final_payload)
 
 @app.route('/', methods=['GET'])
 def index():
