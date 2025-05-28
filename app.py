@@ -282,6 +282,12 @@ def extract_preview():
                     if is_wide_cell and row_index > 0: 
                         try:
                             extracted_text_from_cell = page_obj.crop(cell_coords_pdf).extract_text()
+                            try:
+                                if(extracted_text_from_cell.isnumeric() or float(extracted_text_from_cell) or extracted_text_from_cell == ''):
+                                    extracted_text_from_cell = None
+                            except Exception as e:
+                                # Do nothing
+                                extracted_text_from_cell = extracted_text_from_cell
                         except Exception as e:
                             app.logger.warning(f"[page {page_num}] Failed to extract text from wide cell at row {row_index}: {e}")
                             extracted_text_from_cell = None
@@ -289,7 +295,7 @@ def extract_preview():
                         if extracted_text_from_cell:
                             current_page_position_text = extracted_text_from_cell.strip()
                             current_page_position_order = current_page_position_order + 1
-                        image_draw_context.rectangle([scaled_x0, scaled_y0, scaled_x1, scaled_y1], outline="green", width=1)
+                            image_draw_context.rectangle([scaled_x0, scaled_y0, scaled_x1, scaled_y1], outline="green", width=1)
 
                     if cell_index == 1 and row_index != 1:
                         visual_objects = []

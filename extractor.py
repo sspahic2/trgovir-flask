@@ -14,6 +14,8 @@ class PDFSelectiveNumericTableExtractor:
         self.pdf = pdf
 
     def clean_number(self, value: str) -> Optional[float | int]:
+        if(value == ''): return 0
+
         if not value:
             return None
         value = value.strip()
