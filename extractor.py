@@ -65,7 +65,7 @@ class PDFSelectiveNumericTableExtractor:
                         ])
                     ).lower()
 
-                    if "mreže - specifikacija" in row_text:
+                    if ("mreže - specifikacija" or "mreže - rekapitulacija" or "šipke - rekapitulacija") in row_text:
                         break  # stop parsing rows for this page
 
                     # 👇 Use backup_field_mappings for 12-cell rows
@@ -77,6 +77,22 @@ class PDFSelectiveNumericTableExtractor:
                             "n": 10,
                             "lgn": 11
                         }
+                    elif len(row.cells) == 10:
+                        used_mapping = {
+                            "ozn": 0,
+                            "diameter": 3,
+                            "lg": 5,
+                            "n": 6,
+                            "lgn": 8
+                        }
+                    elif len(row.cells) == 16:
+                        used_mapping = {
+                            "ozn": 0,
+                            "diameter": 7,
+                            "lg": 9,
+                            "n": 11,
+                            "lgn": 13
+                        }
                     else:
                         used_mapping = self.field_mapping
 
@@ -85,7 +101,7 @@ class PDFSelectiveNumericTableExtractor:
                         if idx < len(row.cells):
                             bbox = row.cells[idx]
                             if bbox:
-                                value = page.crop(bbox).extract_text()
+                                value = page.crop(bbox).extract_text().replace(',', '.')
                                 value = self.clean_number(f"{value}")
                             else:
                                 value = None

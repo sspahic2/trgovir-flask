@@ -398,6 +398,9 @@ def extract_preview():
                     "oblikIMere": image_url
                 }
 
+                if row["diameter"] == 0 and row["lg"] == 0 and row["lgn"] == 0 and row["n"] == 0:
+                    continue
+
                 if position in position_group_map:
                     position_group_map[position]["rows"].append(row)
                 else:
