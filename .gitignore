@@ -11,4 +11,5 @@ docs/_build/
 uploads/
 extracted_shapes/
 extracted_data/
+fixtures/
 fullcode.txt
