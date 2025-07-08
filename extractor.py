@@ -27,6 +27,16 @@ class PDFSelectiveNumericTableExtractor:
             return num
         except ValueError:
             return None
+        
+    def clamp_bbox(self, bbox, page):
+        x0, y0, x1, y1 = bbox
+        page_x0, page_y0, page_x1, page_y1 = page.bbox
+        return (
+            max(x0, page_x0),
+            max(y0, page_y0),
+            min(x1, page_x1),
+            min(y1, page_y1)
+        )
 
     def page_contains_indicator(self, page) -> bool:
         text = page.extract_text()
@@ -60,7 +70,7 @@ class PDFSelectiveNumericTableExtractor:
                     # 🛑 STOP parsing more rows if this row contains the stop keyword
                     row_text = " ".join(
                         filter(None, [
-                            page.crop(cell).extract_text() if cell else ""
+                            page.crop(self.clamp_bbox(cell, page)).extract_text() if cell else ""
                             for cell in row.cells
                         ])
                     ).lower()
@@ -101,7 +111,7 @@ class PDFSelectiveNumericTableExtractor:
                         if idx < len(row.cells):
                             bbox = row.cells[idx]
                             if bbox:
-                                value = page.crop(bbox).extract_text().replace(',', '.')
+                                value = page.crop(self.clamp_bbox(bbox, page)).extract_text().replace(',', '.')
                                 value = self.clean_number(f"{value}")
                             else:
                                 value = None
@@ -130,7 +140,8 @@ if __name__ == "__main__":
         indicator_texts=[
             "Šipke - specifikacija", "Šipke-specifikacija",
             "šipke-Specifikacija", "šipke - Specifikacija",
-            "Šipke-Specifikacija", "Šipke - Specifikacija"
+            "Šipke-Specifikacija", "Šipke - Specifikacija",
+            "Šipke specifikacija"
         ],
         field_mapping={
             "ozn": 0,
@@ -142,4 +153,4 @@ if __name__ == "__main__":
     )
 
     data = extractor.run()
-    print(json.dumps(data, indent=2))
+    # print(json.dumps(data, indent=2))
