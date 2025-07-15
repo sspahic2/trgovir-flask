@@ -15,7 +15,8 @@ def run_extract_preview(request):
         "Šipke - specifikacija", "Šipke-specifikacija",
         "šipke-Specifikacija", "šipke - Specifikacija",
         "Šipke-Specifikacija", "Šipke - Specifikacija",
-        "Šipke specifikacija",
+        "Šipke specifikacija", "BINGO - GRAČANICA",
+        "BINGO-GRAČANICA",
         "SPECIFIKACIJA - Armaturne šipke"
     ]
     field_mapping = { "ozn": 0, "diameter": 2, "lg": 3, "n": 4, "lgn": 5 }

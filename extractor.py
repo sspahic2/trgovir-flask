@@ -79,6 +79,7 @@ class PDFSelectiveNumericTableExtractor:
                         break  # stop parsing rows for this page
 
                     # 👇 Use backup_field_mappings for 12-cell rows
+                    # print("Length of cells ",len(row.cells))
                     if len(row.cells) == 12:
                         used_mapping = {
                             "ozn": 0,
@@ -103,6 +104,14 @@ class PDFSelectiveNumericTableExtractor:
                             "n": 11,
                             "lgn": 13
                         }
+                    elif len(row.cells) == 9:
+                        used_mapping = {
+                            "ozn": 0,
+                            "diameter": 4,
+                            "lg": 5,
+                            "n":7,
+                            "lgn": 8
+                        }
                     else:
                         used_mapping = self.field_mapping
 
@@ -112,6 +121,7 @@ class PDFSelectiveNumericTableExtractor:
                             bbox = row.cells[idx]
                             if bbox:
                                 value = page.crop(self.clamp_bbox(bbox, page)).extract_text().replace(',', '.')
+                                # print(value, "My idx " + str(idx) + " " + field_name)
                                 value = self.clean_number(f"{value}")
                             else:
                                 value = None
