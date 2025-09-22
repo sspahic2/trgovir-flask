@@ -81,7 +81,8 @@ def extract_shapes_and_images(app, pdf, extracted_data, indicator_texts):
             "position_group_map": position_group_map,
             "extracted_data": extracted_data,
             "app": app,
-            "page_num": page_num
+            "page_num": page_num,
+            "debug_bbox_dump": True
         }
 
         run_page_extraction(exec_globals)

@@ -1,4 +1,5 @@
 import os
+import json
 from PIL import ImageDraw
 
 from helpers.extract.core.scaling_utils import (
@@ -29,22 +30,41 @@ def run_page_extraction(g):
     images_collected = g["images_collected_for_page"]
     app = g["app"]
     page_num = g["page_num"]
+    debug_bbox_dump = g.get("debug_bbox_dump", False)
 
     x_scale = width_img / width_pdf
     y_scale = height_img / height_pdf
 
     visual_objects = []
     for obj_type in ["line", "rect", "curve"]:
-        for obj in page_obj.objects.get(obj_type, []):
-            visual_objects.append(
-                scale_visual_bbox(obj, x_scale, y_scale, height_img)
-            )
+        for idx, obj in enumerate(page_obj.objects.get(obj_type, [])):
+            bbox = scale_visual_bbox(obj, x_scale, y_scale, height_img)
+            width_px = bbox["x1"] - bbox["x0"]
+            height_px = bbox["y1"] - bbox["y0"]
+            if width_px <= 1 and height_px <= 1:
+                continue
+            bbox['source'] = f'visual:{obj_type}'
+            bbox['index'] = idx
+            bbox['pdf_x0'] = min(obj.get('x0', 0), obj.get('x1', 0))
+            bbox['pdf_x1'] = max(obj.get('x0', 0), obj.get('x1', 0))
+            bbox['pdf_y0'] = min(obj.get('y0', 0), obj.get('y1', 0))
+            bbox['pdf_y1'] = max(obj.get('y0', 0), obj.get('y1', 0))
+            bbox['width'] = width_px
+            bbox['height'] = height_px
+            visual_objects.append(bbox)
 
     try:
-        word_objects = [
-            scale_word_bbox(w, width_pdf, height_pdf, width_img, height_img)
-            for w in page_obj.extract_words()
-        ]
+        word_objects = []
+        for idx, w in enumerate(page_obj.extract_words()):
+            bbox = scale_word_bbox(w, width_pdf, height_pdf, width_img, height_img)
+            bbox['source'] = 'word'
+            bbox['index'] = idx
+            bbox['text'] = w.get('text')
+            bbox['pdf_x0'] = w.get('x0')
+            bbox['pdf_x1'] = w.get('x1')
+            bbox['pdf_y0'] = w.get('top')
+            bbox['pdf_y1'] = w.get('bottom')
+            word_objects.append(bbox)
     except Exception as e:
         app.logger.warning(f"[page {page_num}] Failed to extract words: {e}")
         word_objects = []
@@ -57,7 +77,8 @@ def run_page_extraction(g):
                 continue
 
             x0_pdf, _, x1_pdf, _ = cell_coords
-            inset = 5
+            inset_x = 5
+            inset_y = 10
 
             cell_width = x1_pdf - x0_pdf
             is_wide = abs(cell_width - (xmax - xmin)) < 2
@@ -75,10 +96,10 @@ def run_page_extraction(g):
                 y0_pdf = cell_coords[1]
                 y1_pdf = cell_coords[3]
 
-            scaled_x0 = ((x0_pdf / width_pdf) * width_img) + inset
-            scaled_y0 = ((y0_pdf / height_pdf) * height_img) + inset
-            scaled_x1 = ((x1_pdf / width_pdf) * width_img) - inset
-            scaled_y1 = ((y1_pdf / height_pdf) * height_img) - inset
+            scaled_x0 = ((x0_pdf / width_pdf) * width_img) + inset_x
+            scaled_y0 = ((y0_pdf / height_pdf) * height_img) + inset_y
+            scaled_x1 = ((x1_pdf / width_pdf) * width_img) - inset_x
+            scaled_y1 = ((y1_pdf / height_pdf) * height_img) - inset_y
 
             if is_wide and row_index > 0:
                 try:
@@ -119,11 +140,82 @@ def run_page_extraction(g):
                     obj_x1 = max(obj["x1"] for obj in content_objects)
                     obj_y1 = max(obj["y1"] for obj in content_objects)
 
-                    pad = 0
-                    scaled_crop_x0 = max(0, obj_x0 - pad)
-                    scaled_crop_y0 = min(scaled_y0, max(0, obj_y0 - pad))
-                    scaled_crop_x1 = min(width_img, obj_x1 + pad)
-                    scaled_crop_y1 = max(scaled_y1, min(height_img, obj_y1 + pad))
+                    pad_x = 0
+                    pad_y = 0
+                    scaled_crop_x0 = max(0, obj_x0 - pad_x)
+                    scaled_crop_y0 = min(scaled_y0, max(0, obj_y0 - pad_y))
+                    scaled_crop_x1 = min(width_img, obj_x1 + pad_x)
+                    scaled_crop_y1 = max(scaled_y1, min(height_img, obj_y1 + pad_y))
+
+                    if debug_bbox_dump:
+                        sorted_objects = sorted(content_objects, key=lambda o: (o["x0"], o["y0"]))
+                        serialized_objects = []
+                        visual_serialized = []
+                        for item in sorted_objects:
+                            obj_data = {
+                                "source": item.get("source"),
+                                "index": item.get("index"),
+                                "text": item.get("text"),
+                                "bbox": [item["x0"], item["y0"], item["x1"], item["y1"]],
+                                "pdf_bbox": [item.get("pdf_x0"), item.get("pdf_y0"), item.get("pdf_x1"), item.get("pdf_y1")],
+                                "width": (item["x1"] - item["x0"]),
+                                "height": (item["y1"] - item["y0"])
+                            }
+                            serialized_objects.append(obj_data)
+                            if str(item.get("source", "")).startswith("visual"):
+                                visual_serialized.append(obj_data)
+                        debug_payload = {
+                            "page": page_num,
+                            "row_index": row_index,
+                            "cell_index": cell_index,
+                            "scaled_cell_bbox": [scaled_x0, scaled_y0, scaled_x1, scaled_y1],
+                            "scaled_crop_bbox": [scaled_crop_x0, scaled_crop_y0, scaled_crop_x1, scaled_crop_y1],
+                            "min_object_x0": obj_x0,
+                            "max_object_x1": obj_x1,
+                            "left_gap_pixels": scaled_crop_x0 - obj_x0,
+                            "objects": serialized_objects,
+                            "visual_objects_in_cell": visual_serialized,
+                            "cell_inset_x": inset_x,
+                            "cell_inset_y": inset_y,
+                            "pad_x": pad_x,
+                            "pad_y": pad_y,
+                            "scaled_cell_x0": scaled_x0,
+                            "scaled_cell_x1": scaled_x1
+                        }
+                        debug_filename = f"page_{page_num}_row_{row_index}_cell_{cell_index}_debug.json"
+                        debug_path = os.path.join(folder, debug_filename)
+                        try:
+                            with open(debug_path, 'w', encoding='utf-8') as debug_file:
+                                json.dump(debug_payload, debug_file, indent=2)
+                        except Exception as err:
+                            app.logger.warning(f'[page {page_num}] Failed to write bbox debug data for row {row_index}, cell {cell_index}: {err}')
+
+                elif debug_bbox_dump:
+                    debug_payload = {
+                        "page": page_num,
+                        "row_index": row_index,
+                        "cell_index": cell_index,
+                        "scaled_cell_bbox": [scaled_x0, scaled_y0, scaled_x1, scaled_y1],
+                        "scaled_crop_bbox": [scaled_crop_x0, scaled_crop_y0, scaled_crop_x1, scaled_crop_y1],
+                        "min_object_x0": None,
+                        "max_object_x1": None,
+                        "left_gap_pixels": None,
+                        "objects": [],
+                        "visual_objects_in_cell": [],
+                        "cell_inset_x": inset_x,
+                        "cell_inset_y": inset_y,
+                        "pad_x": 0,
+                        "pad_y": 0,
+                        "scaled_cell_x0": scaled_x0,
+                        "scaled_cell_x1": scaled_x1
+                    }
+                    debug_filename = f"page_{page_num}_row_{row_index}_cell_{cell_index}_debug.json"
+                    debug_path = os.path.join(folder, debug_filename)
+                    try:
+                        with open(debug_path, 'w', encoding='utf-8') as debug_file:
+                            json.dump(debug_payload, debug_file, indent=2)
+                    except Exception as err:
+                        app.logger.warning(f'[page {page_num}] Failed to write bbox debug data for row {row_index}, cell {cell_index}: {err}')
 
                 cropped = image.crop((scaled_crop_x0, scaled_crop_y0, scaled_crop_x1, scaled_crop_y1))
 
